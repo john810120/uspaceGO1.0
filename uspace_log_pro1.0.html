@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USPACE 場域維護紀錄</title>
+<style>
+body{ font-family: "Microsoft JhengHei", Arial, sans-serif; background:#f0f4f8; margin:0; color:#333; }
+.header{ background:#17375e; color:white; text-align:center; padding:18px; font-size:24px; font-weight:bold; letter-spacing:1px; }
+.container{ max-width:650px; margin:auto; padding:15px; }
+.card{ background:white; border-radius:16px; padding:18px; margin-bottom:18px; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+label{ font-weight:bold; font-size:14px; color:#17375e; display:block; margin-bottom:6px; }
+input, select{ width:100%; padding:12px; margin-top:4px; margin-bottom:12px; border-radius:10px; border:1px solid #cbd5e0; box-sizing:border-box; font-size:16px; transition: 0.2s; }
+input:focus{ border-color: #17375e; outline: none; box-shadow: 0 0 0 3px rgba(23,55,94,0.1); }
+button{ background:#17375e; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; transition: 0.2s; }
+button:active{ transform: scale(0.98); opacity: 0.9; }
+.smallBtn{ padding:8px 14px; margin-right:6px; font-size:13px; }
+.row{ display:flex; gap:10px; }
+.row > *{ flex:1; }
+.stats{ display:flex; gap:12px; margin:12px 0; }
+.statBox{ padding:10px; border-radius:10px; font-size:15px; flex:1; text-align:center; font-weight:bold; background:#fff; border:1px solid #e2e8f0; }
+#siteCount{ color:#2b6cb0; border-top:4px solid #63b3ed; }
+#successCount{ color:#2f855a; border-top: 4px solid #48bb78; }
+#failCount{ color:#c53030; border-top: 4px solid #f56565; }
+table{ width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+th{ background:#f8fafc; color:#64748b; padding:10px; border-bottom:2px solid #e2e8f0; }
+td{ padding:12px 8px; border-bottom:1px solid #edf2f7; text-align:center; }
+.deleteBtn{ background:#e53e3e; padding:6px 10px; font-size:11px; }
+.result-success{ color:#2f855a; background:#f0fff4; padding:4px 8px; border-radius:6px; font-weight:bold; }
+.result-fail{ color:#c53030; background:#fff5f5; padding:4px 8px; border-radius:6px; font-weight:bold; }
+.scroll-table { overflow-x: auto; border-radius: 8px; border: 1px solid #e2e8f0; }
+.smart-hint { background:#fff3cd; padding:10px; border-radius:10px; border:1px solid #ffeeba; margin-bottom:15px; }
+
+#siteDropdown{
+display:none;
+}
+</style>
+</head>
+<body>
+
+<div class="header">USPACE 場域維護紀錄</div>
+
+<div class="container">
+<div class="card">
+
+<label>操作人員</label>
+<input id="operator" placeholder="請輸入姓名">
+
+<div class="smart-hint">
+<label>🔍 場域名稱 (直接輸入關鍵字可自動過濾)</label>
+<div style="position:relative; z-index:1000;">
+<input id="siteInput" onclick="filterSites()" oninput="filterSites()" onfocus="filterSites()" placeholder="輸入：延吉街、光復...">
+<div id="siteDropdown" style="position:absolute;top:100%;left:0;width:100%;background:white;border:1px solid #ddd;border-radius:8px;max-height:200px;overflow-y:auto;z-index:999;"></div>
+</div>
+
+<div class="row">
+<button class="smallBtn deleteBtn" onclick="deleteCurrentSite()" style="flex:none;">刪除選中場域</button>
+<span style="font-size: 11px; color: #777; align-self: center;">*輸入清單外的名稱提交，會自動存入選單</span>
+</div>
+</div>
+
+<label>車位號碼</label>
+<input id="spot" placeholder="例: 1-5 或 1.2.3">
+
+<div class="row">
+<div>
+<label>維護結果</label>
+<select id="result">
+<option value="換電">🟢 換電</option>
+<option value="有車">🔴 有車</option>
+</select>
+</div>
+
+<div>
+<label>備註</label>
+<input id="note" placeholder="可不填">
+</div>
+</div>
+
+<button style="width:100%; font-size:18px; margin-top:10px;" onclick="addRecord()">提交維護紀錄</button>
+
+</div>
+
+<div class="card">
+
+<label>歷史紀錄搜尋</label>
+<input id="search" oninput="render()" placeholder="搜尋歷史中的場域或人員...">
+
+<div class="row" style="align-items:center; margin-bottom:10px;">
+<button onclick="changeDate(-1)">◀</button>
+<div id="dateText" style="text-align:center; font-weight:bold; font-size:16px;"></div>
+<button onclick="changeDate(1)">▶</button>
+</div>
+
+<div class="stats">
+<div id="siteCount" class="statBox">場域 : 0</div>
+<div id="successCount" class="statBox">換電車位 : 0</div>
+<div id="failCount" class="statBox">有車車位 : 0</div>
+</div>
+
+<div class="scroll-table">
+<table>
+<thead>
+<tr>
+<th>人員</th>
+<th>場域</th>
+<th>車位</th>
+<th>結果</th>
+<th>備註</th>
+<th></th>
+</tr>
+</thead>
+
+<tbody id="recordTable"></tbody>
+
+</table>
+</div>
+</div>
+</div>
+
+<script>
+
+const rawInput = [
+
+"聯合報車位",
+"萬善堂後方(俥亭合作場)",
+"嵜本吐司鄰近車位",
+"國父紀念館(光復南路421巷)",
+"國父紀念館(光復南路419巷)",
+"信園社區(松仁路)",
+"松隆虎林街3020車位",
+"協和祐德高中鄰近車位",
+"刑事警察局",
+"光復南路美廉社車位",
+"光復南路417巷精華車位",
+"永春捷運站鄰近車位",
+"永春大樓後方車位",
+"永吉路巷弄車位",
+"永吉路30巷鄰近車位",
+"永吉麥當勞後方(俥亭合作)",
+"永吉路金三角車位(原正饒河)",
+"六張犁崇德街鄰近精華車位",
+"濟南路三段鄰近車位",
+"龍門國中鄰近車位",
+"德安公園鄰近車位",
+"嘉興基隆路精華車位",
+"溫州公園",
+"敦化和平精華車",
+"敦化四維精華車位",
+"復興南路精華車位",
+"復興南路車位(小李子對面)",
+"政大公企中心",
+"忠孝東路251巷車位",
+"成功郵局鄰近車位",
+"安和路兆豐銀行鄰近車位",
+"安和路二段鄰近車位",
+"平安公園鄰近車位",
+"四維路216巷精華車位",
+"文昌街鄰近車位",
+"仁愛國小鄰近車位",
+"大安森林公園(近新生南路)",
+"大安國小車位",
+"大安區寵物生活館車位",
+"辛亥BOSIC精華車位",
+"舒服生活咖啡廳絕美車位",
+"光復國小鄰近車位(頂棚下)",
+"師大功德站(38巷)",
+"師大功德站(40巷)",
+"忠孝復興精華車位",
+"仁愛路巷弄車位",
+"湘誠葡萄酒",
+"延吉街車位(有棚涼快)",
+"CONVERSE前車位",
+"鳳凰大廈後門車位",
+"聚鑫行銷前車位",
+"鼎康華廈精華車位(延吉街)",
+"敦南誠品後巷-寬心園旁",
+"敦南誠品後巷-新力大廈",
+"小捲尾寵物精品美容前方車位",
+"延吉街(全聯前方)",
+"初生 生 旗艦店",
+"衣櫥餐酒前方車位",
+"光復南路精華車位(52號)",
+"光復南路巷弄(42號)",
+"光復南路巷弄(40號)",
+"永春大廈(波記茶餐廳對面)",
+"小班韓式右轉延吉街131巷",
+"市民大道六段(饒河街夜市旁)",
+"信義四維精華車位",
+"復興市民鄰近車位",
+"信義路四段巷內小小車位",
+"軒維小廚前方車位",
+"hyphen for the arts 車位",
+"大安高工鄰近車位",
+"虎林街74巷車位",
+"浦城街精華車位",
+"通化街精華車位",
+"青田街鄰近車位",
+"樂業街精華車位",
+"芙蓉大樓1F平面車位",
+"仁愛圓環鄰近車位",
+"USPACE光復大廈平面車位",
+"USPACE崇德街停車場",
+"Top Hair Salon蕾琦髮藝",
+"IKEA台北城市店鄰近車位",
+"Howard's Bike車位",
+"監理站鄰近車位",
+"監理站後方車位（Honda後方）",
+"敦化北路238巷車位",
+"敦化北路(法蘭司麵包店旁)",
+"復盛公園鄰近車位",
+"國軍松山總醫院臨近車位",
+"南京復興車位(南京東路）",
+"長庚醫院後方車位",
+"光復北路177巷車位",
+"光復大樓精華車位",
+"民族東路鄰近車位",
+"民生社區精華車位(新中街)",
+"台視臨近車位(寧安街)",
+"台北體育場鄰近車位",
+"台北機廠鄰近車位"
+
+];
+
+
+let sites = [...new Set(rawInput.map(s => s.trim()))].sort();
+
+let records = JSON.parse(localStorage.getItem("records") || "[]");
+
+let currentDate = new Date().toISOString().split("T")[0];
+
+const savedSites = JSON.parse(localStorage.getItem("sites"));
+
+if(savedSites && savedSites.length > 0) sites = savedSites;
+
+function save(){
+localStorage.setItem("records", JSON.stringify(records));
+localStorage.setItem("sites", JSON.stringify(sites));
+}
+
+function updateDataList(){
+
+const dropdown=document.getElementById("siteDropdown");
+
+dropdown.innerHTML="";
+
+sites.forEach(site=>{
+
+let div=document.createElement("div");
+
+div.innerText=site;
+
+div.style.padding="8px";
+div.style.cursor="pointer";
+
+div.onclick=function(){
+
+document.getElementById("siteInput").value=site;
+
+dropdown.style.display="none";
+
+};
+
+dropdown.appendChild(div);
+
+});
+
+}
+function deleteCurrentSite(){
+
+let val=document.getElementById("siteInput").value;
+
+if(!val) return;
+
+if(confirm(`確定要從選單中刪除「${val}」嗎？`)){
+
+sites=sites.filter(s=>s!==val);
+
+save();
+
+updateDataList();
+
+document.getElementById("siteInput").value="";
+
+}
+
+}
+
+function expandSpots(text){
+
+let arr=[];
+
+text.split(".").forEach(p=>{
+
+p=p.trim();
+
+if(p.includes("-")){
+
+let [a,b]=p.split("-").map(Number);
+
+if(!isNaN(a)&&!isNaN(b)){
+
+for(let i=a;i<=b;i++) arr.push(i);
+
+}
+
+}else if(p!==""){
+
+arr.push(p);
+
+}
+
+});
+
+return arr.join(".");
+
+}
+
+function addRecord(){
+
+let operator=document.getElementById("operator").value.trim()||"未填";
+
+let site=document.getElementById("siteInput").value.trim();
+
+let spotRaw=document.getElementById("spot").value;
+
+let spot=expandSpots(spotRaw);
+
+let result=document.getElementById("result").value;
+
+let note=document.getElementById("note").value;
+
+if(!site){ alert("請輸入或選擇場域名稱"); return; }
+
+if(!spotRaw){ alert("請輸入車位號碼"); return; }
+
+if(!sites.includes(site)){
+
+sites.push(site);
+
+sites.sort();
+
+updateDataList();
+
+}
+
+records.push({operator,site,spot,result,note,date:currentDate});
+
+save();
+
+render();
+
+document.getElementById("spot").value="";
+
+document.getElementById("note").value="";
+
+}
+
+function deleteRecord(i){
+
+if(confirm("確定刪除此紀錄？")){
+
+records.splice(i,1);
+
+save();
+
+render();
+
+}
+
+}
+
+function changeDate(n){
+
+let d=new Date(currentDate);
+
+d.setDate(d.getDate()+n);
+
+currentDate=d.toISOString().split("T")[0];
+
+render();
+
+}
+
+function render(){
+
+document.getElementById("dateText").innerText=currentDate;
+
+let search=document.getElementById("search").value.toLowerCase();
+
+let html="";
+
+let success=0;
+
+let fail=0;
+
+let siteSet=new Set();
+
+for(let i=records.length-1;i>=0;i--){
+
+let r=records[i];
+
+if(r.date!==currentDate) continue;
+
+if(search && !(r.site.toLowerCase().includes(search)||r.operator.toLowerCase().includes(search))) continue;
+
+siteSet.add(r.site);
+
+let spots=r.spot.split(".").length;
+
+if(r.result.includes("換電")) success+=spots;
+
+else fail+=spots;
+
+html+=`
+
+<tr>
+
+<td style="color:#64748b;">${r.operator}</td>
+
+<td style="text-align:left; font-weight:600;">${r.site}</td>
+
+<td style="color:#2b6cb0;">${r.spot}</td>
+
+<td><span class="${r.result.includes('換電')?'result-success':'result-fail'}">${r.result}</span></td>
+
+<td style="font-size:11px; color:#718096;">${r.note||""}</td>
+
+<td><button class="deleteBtn" onclick="deleteRecord(${i})">刪</button></td>
+
+</tr>
+
+`;
+
+}
+
+document.getElementById("recordTable").innerHTML=html;
+
+document.getElementById("siteCount").innerText="場域 : "+siteSet.size;
+
+document.getElementById("successCount").innerText="換電車位 : "+success;
+
+document.getElementById("failCount").innerText="有車車位 : "+fail;
+
+}
+
+function filterSites(){
+
+let input=document.getElementById("siteInput");
+let dropdown=document.getElementById("siteDropdown");
+
+let keyword=input.value.toLowerCase();
+
+dropdown.innerHTML="";
+dropdown.style.display="block";
+
+let list=sites.filter(s=>s.toLowerCase().includes(keyword));
+
+if(list.length===0){
+dropdown.style.display="none";
+return;
+}
+
+list.slice(0,50).forEach(site=>{
+
+let item=document.createElement("div");
+
+item.textContent=site;
+item.style.padding="10px";
+item.style.cursor="pointer";
+
+item.onmouseover=function(){
+item.style.background="#f1f5f9";
+}
+
+item.onmouseout=function(){
+item.style.background="white";
+}
+
+item.onclick=function(){
+
+input.value=site;
+dropdown.innerHTML="";
+dropdown.style.display="none";
+
+}
+
+dropdown.appendChild(item);
+
+});
+
+}
+
+window.onload = function(){
+
+updateDataList();
+render();
+
+};
+</script>
+
+
+</body>
+</html>
